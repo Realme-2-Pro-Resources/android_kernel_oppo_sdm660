@@ -614,6 +614,9 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&gpio_vdd_en_default &gpio_fpc_irq_default>;
 	};
+	restart@10ac000 {
+		qcom,force-warm-reboot;
+	};
 };
 
 &i2c_1 {
