@@ -253,7 +253,7 @@ ifeq ($(KERNEL_BUILD), 1)
 	obj-y	+= wsa883x/
 	obj-y	+= sdm660_cdc/
 	obj-y	+= msm_sdw/
-	ifneq ($(filter y,$(CONFIG_MACH_OPPO_R11) $(CONFIG_MACH_OPPO_R11S)),)
+	ifeq ($(CONFIG_MACH_OPPO_SDM660), y)
 	obj-$(CONFIG_SND_SOC_OPPO_AK4376) += ak4376/
 	obj-$(CONFIG_SND_SOC_OPPO_MAX98927) += max98927/
 	obj-$(CONFIG_SND_SOC_OPPO_TFA98XX) += tfa98xx/
