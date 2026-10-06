@@ -473,7 +473,7 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		pr_err("func:%s  sensor_name:%s  is empty\n",__func__, sensor_name);
 	}
 	/*add by hongbo.dai@Camera.for suppor 17081 T0 sensor*/
-	if ((project != 17081 && project != 18005 && project != 18323) || (project == 17081 && !is_eeprom_empty)) {
+	if ((project != 17081 && project != 18005 && project != 18321 && project != 18323) || (project == 17081 && !is_eeprom_empty)) {
 		/*modify hongbo.dai@camera 20180309, s5k5e9 no need to match eeprom sensor id*/
 		if ((i >= size_of_sensor_list)
 			&& (strcmp(s_ctrl->sensordata->sensor_name, "s5k5e9") != 0)) {
