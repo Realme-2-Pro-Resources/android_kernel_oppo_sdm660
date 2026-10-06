@@ -3,9 +3,9 @@
  *
  * VENDOR_EDIT
  * Ported from ColorOS 6.0.1 (kernel 4.4) drivers/input/touchscreen/touch.c,
- * trimmed to the R11 / R11s family (16051, 16103, 16118, 17011, 17021):
- * Synaptics S3508 / S3320 only. All other projects and noflash panels
- * (S3706, NT36672, HX83112A, GT5688, ...) were removed.
+ * trimmed to the R11 / R11s family (16051, 16103, 16118, 17011, 17021) and RMX1801 (18321):
+ * Synaptics S3508 / S3320 and noflash panels only.
+ * All other projects (S3706, GT5688, ...) were removed.
  *
  * Copyright (c)  2008- 2030  Oppo Mobile communication Corp.ltd.
  */
@@ -20,6 +20,9 @@
 #include "oppo_touchscreen/Synaptics/S3508/synaptics_s3508.h"
 #include "oppo_touchscreen/tp_devices.h"
 #include "oppo_touchscreen/touchpanel_common.h"
+#ifdef CONFIG_MACH_REALME_RMX1801
+#include "touch.h"
+#endif
 
 #define MAX_LIMIT_DATA_LENGTH         100
 
@@ -33,6 +36,10 @@
 #define S3508_BASELINE_TEST_LIMIT_NAME_17011 "tp/17011/17011_Limit_data.img"
 #define S3508_FW_NAME_17021 "tp/17021/17021_FW_S3508_SYNAPTICS.img"
 #define S3508_BASELINE_TEST_LIMIT_NAME_17021 "tp/17021/17021_Limit_data.img"
+
+#define NT36672_NF_CHIP_NAME "NT_NF36672"
+
+#define HX83112A_NF_CHIP_NAME "HX_NF83112A"
 
 struct tp_dev_name tp_dev_names[] = {
      {TP_OFILM, "OFILM"},
@@ -57,6 +64,54 @@ struct tp_dev_name tp_dev_names[] = {
 
 int g_tp_dev_vendor = TP_UNKNOWN;
 char *g_tp_chip_name;
+static bool is_tp_type_got_in_match = false;    /*indicate whether the tp type is got in the process of ic match*/
+
+/*
+ * this function is used to judge whether the ic driver should be loaded
+ * For incell module, tp is defined by lcd module, so if we judge the tp ic
+ * by the boot command line of containing lcd string, we can also get tp type.
+ */
+#ifdef CONFIG_MACH_REALME_RMX1801
+bool __init tp_judge_ic_match(char * tp_ic_name)
+{
+    pr_err("[TP] tp_ic_name = %s \n", tp_ic_name);
+    pr_err("[TP] boot_command_line = %s \n", boot_command_line);
+
+    switch(get_project()) {
+    case OPPO_18321:
+        is_tp_type_got_in_match = true;
+        if (strstr(tp_ic_name, "nt36672") && strstr(boot_command_line, "tianma_nt36672")) {
+            g_tp_dev_vendor = TP_TIANMA;
+            #ifdef CONFIG_TOUCHPANEL_MULTI_NOFLASH
+            g_tp_chip_name = kzalloc(sizeof(NT36672_NF_CHIP_NAME), GFP_KERNEL);
+            g_tp_chip_name = NT36672_NF_CHIP_NAME;
+            #endif
+            return true;
+        }
+        if (strstr(tp_ic_name, "hx83112a_nf") && strstr(boot_command_line, "himax_hx83112")) {
+            g_tp_dev_vendor = TP_DSJM;
+            #ifdef CONFIG_TOUCHPANEL_MULTI_NOFLASH
+            g_tp_chip_name = kzalloc(sizeof(HX83112A_NF_CHIP_NAME), GFP_KERNEL);
+            g_tp_chip_name = HX83112A_NF_CHIP_NAME;
+            #endif
+            return true;
+        }
+        if (strstr(tp_ic_name, "nt36672") && strstr(boot_command_line, "dpt_jdi_nt36672")) {
+            g_tp_dev_vendor = TP_DEPUTE;
+            #ifdef CONFIG_TOUCHPANEL_MULTI_NOFLASH
+            g_tp_chip_name = kzalloc(sizeof(NT36672_NF_CHIP_NAME), GFP_KERNEL);
+            g_tp_chip_name = NT36672_NF_CHIP_NAME;
+            #endif
+            return true;
+        }
+    default:
+        pr_err("Invalid project\n");
+        break;
+    }
+    pr_err("Lcd module not found\n");
+    return false;
+}
+#endif
 
 /*
  * Resolve the per-project firmware / test-limit paths for the R11 series
@@ -64,6 +119,42 @@ char *g_tp_chip_name;
  */
 int tp_util_get_vendor(struct hw_resource *hw_res, struct panel_info *panel_data)
 {
+    #ifdef CONFIG_MACH_REALME_RMX1801
+    int id1 = -1, id2 = -1, id3 = -1;
+    char* vendor;
+
+    if (gpio_is_valid(hw_res->id1_gpio)) {
+        id1 = gpio_get_value(hw_res->id1_gpio);
+    }
+    if (gpio_is_valid(hw_res->id2_gpio)) {
+        id2 = gpio_get_value(hw_res->id2_gpio);
+    }
+    if (gpio_is_valid(hw_res->id3_gpio)) {
+        id3 = gpio_get_value(hw_res->id3_gpio);
+    }
+
+    pr_err("[TP]%s: id1 = %d, id2 = %d, id3 = %d\n", __func__, id1, id2, id3);
+    if ((id1 == 1) && (id2 == 1) && (id3 == 0)) {
+        pr_err("[TP]%s::OFILM\n", __func__);
+        panel_data->tp_type = TP_OFILM;
+    } else if ((id1 == 0) && (id2 == 0) && (id3 == 0)) {
+        pr_err("[TP]%s::TP_TPK\n", __func__);
+        panel_data->tp_type = TP_TPK;
+    } else if ((id1 == 0) && (id2 == 0) && (id3 == 0)) {
+        pr_err("[TP]%s::TP_TRULY\n", __func__);
+        panel_data->tp_type = TP_TRULY;
+    } else {
+        pr_err("[TP]%s::TP_UNKNOWN\n", __func__);
+        panel_data->tp_type = TP_TRULY;
+    }
+
+    #ifdef CONFIG_TOUCHPANEL_MULTI_NOFLASH
+    if (g_tp_chip_name != NULL) {
+        panel_data->chip_name = g_tp_chip_name;
+    }
+    #endif
+    #endif
+
     if (is_project(OPPO_16051)) {
         panel_data->test_limit_name = kzalloc(sizeof(S3508_BASELINE_TEST_LIMIT_NAME), GFP_KERNEL);
         if (panel_data->test_limit_name == NULL) {
@@ -109,6 +200,74 @@ int tp_util_get_vendor(struct hw_resource *hw_res, struct panel_info *panel_data
         strcpy(panel_data->test_limit_name, S3508_BASELINE_TEST_LIMIT_NAME_17021);
         strcpy(panel_data->fw_name, S3508_FW_NAME_17021);
         pr_err("[TP]%s: fw_name = %s \n",__func__, panel_data->fw_name);
+    } else if (is_project(OPPO_18321)) {
+        #ifdef CONFIG_MACH_REALME_RMX1801
+        panel_data->test_limit_name = kzalloc(MAX_LIMIT_DATA_LENGTH, GFP_KERNEL);
+        if (panel_data->test_limit_name == NULL) {
+            pr_err("[TP]panel_data.test_limit_name kzalloc error\n");
+        }
+
+        panel_data->extra= kzalloc(MAX_LIMIT_DATA_LENGTH, GFP_KERNEL);
+        if (panel_data->extra == NULL) {
+            pr_err("[TP]panel_data.test_limit_name kzalloc error\n");
+        }
+
+        panel_data->tp_type = g_tp_dev_vendor;
+        if (panel_data->tp_type == TP_UNKNOWN) {
+            pr_err("[TP]%s type is unknown\n", __func__);
+            return 0;
+        }
+
+        vendor = GET_TP_DEV_NAME(panel_data->tp_type);
+        strcpy(panel_data->manufacture_info.manufacture, vendor);
+        snprintf(panel_data->fw_name, MAX_FW_NAME_LENGTH,
+                "tp/%d/FW_%s_%s.img",
+                get_project(), panel_data->chip_name, vendor);
+
+        if (panel_data->test_limit_name) {
+            snprintf(panel_data->test_limit_name, MAX_LIMIT_DATA_LENGTH,
+                "tp/%d/LIMIT_%s_%s.img",
+                get_project(), panel_data->chip_name, vendor);
+
+        }
+
+        if (panel_data->extra) {
+            snprintf(panel_data->extra, MAX_LIMIT_DATA_LENGTH,
+                "tp/%d/BOOT_FW_%s_%s.ihex",
+                get_project(), panel_data->chip_name, vendor);
+        }
+
+        if(is_project(OPPO_18321)) {
+            if (strstr(saved_command_line, "tianma_nt36672")) {
+                memcpy(panel_data->manufacture_info.version, "0xBD1671", 8);
+            }else if (strstr(saved_command_line, "dpt_jdi_nt36672")) {
+                memcpy(panel_data->manufacture_info.version, "0xBD1672", 8);
+            }else if (strstr(saved_command_line, "himax_hx83112")) {
+                memcpy(panel_data->manufacture_info.version, "0xBD1673", 8);
+            }
+        }
+
+        if (strstr(saved_command_line, "dpt_jdi_nt36672")) {    //noflash
+            panel_data->firmware_headfile.firmware_data = FW_18316_NT36672A_NF_DEPUTE;
+            panel_data->firmware_headfile.firmware_size = sizeof(FW_18316_NT36672A_NF_DEPUTE);
+        } else if (strstr(saved_command_line, "tianma_nt36672")) {
+            panel_data->firmware_headfile.firmware_data = FW_18316_NT36672A_NF_TIANMA;
+            panel_data->firmware_headfile.firmware_size = sizeof(FW_18316_NT36672A_NF_TIANMA);
+        } else if (strstr(saved_command_line, "himax_hx83112")) {
+            panel_data->firmware_headfile.firmware_data = FW_18316_HX83112A_NF_DSJM;
+            panel_data->firmware_headfile.firmware_size = sizeof(FW_18316_HX83112A_NF_DSJM);
+        } else {
+            panel_data->firmware_headfile.firmware_data = NULL;
+            panel_data->firmware_headfile.firmware_size = 0;
+        }
+
+        pr_info("Vendor:%s\n", vendor);
+        pr_info("Fw:%s\n", panel_data->fw_name);
+        pr_info("Limit:%s\n", panel_data->test_limit_name==NULL?"NO Limit":panel_data->test_limit_name);
+        pr_info("Extra:%s\n", panel_data->extra==NULL?"NO Extra":panel_data->extra);
+        pr_info("is matched %d, type %d\n", is_tp_type_got_in_match, panel_data->tp_type);
+        return 0;
+        #endif
     }
     strcpy(panel_data->manufacture_info.manufacture, "SAMSUNG");
 
