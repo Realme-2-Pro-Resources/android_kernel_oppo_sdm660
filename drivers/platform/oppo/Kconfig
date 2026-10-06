@@ -12,7 +12,6 @@ config MACH_OPPO_SDM660
       Support for OPPO SDM660 devices
 
 menu "OPPO board selection"
-
     config MACH_OPPO_R11
         bool "OPPO 16051 board"
         select MACH_OPPO_SDM660
@@ -24,5 +23,11 @@ menu "OPPO board selection"
         select MACH_OPPO_SDM660
         help
           Support for OPPO R11s, OPPO R11s Plus
+
+    config MACH_REALME_RMX1801
+        bool "OPPO 18321 board"
+        select MACH_OPPO_SDM660
+        help
+          Support for Realme 2 Pro
 
 endmenu
