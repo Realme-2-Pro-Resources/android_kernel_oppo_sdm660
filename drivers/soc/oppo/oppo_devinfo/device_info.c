@@ -290,6 +290,18 @@ static int sub_mainboard_verify(struct devinfo_data *devinfo_data)
 		register_speaker = true;
 		break;
 	}
+	case OPPO_18321:
+	{
+		pr_err("id1 = %d, id2 = %d\n", id1, id2);
+		if ((id1 == 1) && (id2 == 1) && ((get_Modem_Version() == RF_VERSION__17) || (get_Modem_Version() == RF_VERSION__18) || (get_Modem_Version() == RF_VERSION__19) || (get_Modem_Version() == RF_VERSION__1A))) {
+				snprintf(mainboard_info.manufacture, INFO_BUF_LEN, "18321-real-indian-match");
+		}
+		else
+				snprintf(mainboard_info.manufacture, INFO_BUF_LEN, "%d-%d-%d-%d-unmatch", get_project(),get_Modem_Version(),id1, id2);
+
+		register_device_proc("speaker_mainboard", speaker_mainboard_info.version, speaker_mainboard_info.manufacture);
+		break;
+	}
 	default:
 	{
 		snprintf(mainboard_info.manufacture, INFO_BUF_LEN, "%d-%d", get_project(), get_Operator_Version());
