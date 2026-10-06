@@ -55,6 +55,7 @@ enum OPPO_PROJECT {
         OPPO_16118 = 16118,
         OPPO_17011 = 17011,
         OPPO_17021 = 17021,
+        OPPO_18321 = 18321,
 };
 
 enum OPPO_OPERATOR {
