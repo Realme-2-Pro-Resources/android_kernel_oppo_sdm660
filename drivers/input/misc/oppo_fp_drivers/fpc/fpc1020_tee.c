@@ -21,6 +21,7 @@
  **  Ziqing.guo                  2018/03/13                  add fix for coverity 21935, 21734 (Uninitialized scalar variable)
  **  Ran.Chen                    2018/06/26                  add for 1023_2060_GLASS
  **  Yang.Tan                    2018/11/09                  add for 18531 fpc1511
+ **  Mingzhi.Guo                 2019/02/14                  add for 1023_2060_GLASS for 18321 android_p
  **  Hongyu.Lu                   2019/04/19                  add for SM6125 fpc1511
  ************************************************************************************/
 
@@ -66,18 +67,19 @@ struct vreg_config {
 };
 
 static const struct vreg_config const vreg_conf[] = {
-	{
-		"vdd_io",
-		1800000UL,
-		1800000UL,
-		10000,
-	},
+	{ "vdd_io", 1800000UL, 1800000UL, 10000, },
+	#ifdef CONFIG_MACH_REALME_RMX1801
+	{ "vdd_3v", 3000000UL, 3000000UL, 6000, },
+	#endif
 };
 
 struct fpc1020_data {
 	struct device *dev;
 	int irq_gpio;
 	int irq_num;
+	#ifdef CONFIG_MACH_REALME_RMX1801
+	int rst_gpio;
+	#endif
 	struct mutex lock;
 	bool prepared;
 
@@ -254,6 +256,12 @@ static ssize_t regulator_enable_set(struct device *dev,
 		return -EINVAL;
 	}
 	rc = vreg_setup(fpc1020, "vdd_io", enable);
+	#ifdef CONFIG_MACH_REALME_RMX1801
+	if((FP_FPC_1023_GLASS == get_fpsensor_type())) {
+		rc = vreg_setup(fpc1020, "vdd_3v", enable);
+		dev_err(fpc1020->dev, "FP_FPC_1023_GLASS vdd\n");
+	}
+	#endif
 	return rc ? rc : count;
 }
 
@@ -409,6 +417,19 @@ static int fpc1020_probe(struct platform_device *pdev)
 	}
 
 	/*dev_info(fpc1020->dev, "fpc1020 requested gpio finished \n");*/
+	#ifdef CONFIG_MACH_REALME_RMX1801
+	rc = fpc1020_request_named_gpio(fpc1020, "fpc,reset-gpio",
+					&fpc1020->rst_gpio);
+	if (rc) {
+		goto ERR_AFTER_WAKELOCK;
+	}
+
+	gpio_set_value(fpc1020->rst_gpio, 0);
+	udelay(FPC1020_RESET_HIGH2_US);
+
+	gpio_set_value(fpc1020->rst_gpio, 1);
+	udelay(FPC1020_RESET_HIGH1_US);
+	#endif
 
 	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 	mutex_init(&fpc1020->lock);
@@ -436,6 +457,12 @@ static int fpc1020_probe(struct platform_device *pdev)
 	}
 
 	rc = vreg_setup(fpc1020, "vdd_io", true);
+	#ifdef CONFIG_MACH_REALME_RMX1801
+	if((FP_FPC_1023_GLASS == get_fpsensor_type())) {
+		rc = vreg_setup(fpc1020, "vdd_3v", true);
+		dev_err(fpc1020->dev, "FP_FPC_1023_GLASS vdd\n");				
+	}
+	#endif
 	if (rc) {
 		dev_err(fpc1020->dev, "vreg_setup failed.\n");
 		goto ERR_AFTER_WAKELOCK;
