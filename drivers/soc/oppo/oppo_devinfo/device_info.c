@@ -17,7 +17,7 @@
  *     proc_create_data (参考 oppo_touchscreen_feature.c 的 dev_proc_fops)。
  *   - 机型分支裁剪: sub_mainboard_verify/wlan_resource_verify 的 switch 仅
  *     保留 sdm660 实际机型 (16051/16103/16118/17011/17021), 删除 17081/17085/
- *     18316/18005/18321/18323 等无用分支。
+ *     18316/18005/18323 等无用分支; 18321 (RMX1801) 分支仅作为增量 case 保留。
  *   - 保留 origin 实际可达的 sub-mainboard/wlan-resource 路径；目标 DTS
  *     未提供 operator/ant-select 资源，不创建相应的伪信息节点。
  */
