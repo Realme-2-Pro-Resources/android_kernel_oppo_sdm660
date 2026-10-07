@@ -29,6 +29,7 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/time.h>
+#include <linux/ktime.h>
 #include <linux/platform_device.h>
 #include <linux/kobject.h>
 #include <linux/kthread.h>
@@ -2629,10 +2630,9 @@ static int stmvl53l0_stop(struct stmvl53l0_data *data)
 
 	return rc;
 }
-static void stmvl53l0_timer_fn(unsigned long data)
+static void stmvl53l0_timer_fn(struct timer_list *t)
 {
-
-	VL53L0_DEV vl53l0_dev = (VL53L0_DEV)data;
+	VL53L0_DEV vl53l0_dev = from_timer(vl53l0_dev, t, timer);
 
 	vl53l0_dev->flushCount++;
 
@@ -2784,9 +2784,7 @@ int stmvl53l0_setup(struct stmvl53l0_data *data)
 		goto exit_unregister_dev_ps_1;
 	}
 
-	setup_timer(&data->timer,
-				 stmvl53l0_timer_fn,
-				(unsigned long)data);
+	timer_setup(&data->timer, stmvl53l0_timer_fn, 0);
 
 	/* to register as a misc device */
 	data->miscdev.minor = MISC_DYNAMIC_MINOR;
