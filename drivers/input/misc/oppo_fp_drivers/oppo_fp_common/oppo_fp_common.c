@@ -81,6 +81,20 @@ static const struct fp_module_gpio_config_info fp_r11s_config[] = {
 	{ { 1, 1, 1 }, FP_FPC_1022, CHIP_FPC, ENGINEER_MENU_FPC1022 },
 };
 
+/* Realme 2 Pro (18321) module table, taken from the shipped Q firmware
+ * (DumprX/RMX1801-F12 03_*MTP_18321): fpc0/fpc3 {0,0,0}->F_1270 (duplicate,
+ * one row kept), fpc1 {0,1,0}->F_1023, fpc2 {0,1,1}->F_1022,
+ * goodix0 {1,0,1}->G_3268, goodix1 {1,1,0}->G_5288, fpc4 {1,1,1}->F_1022.
+ * No {1,0,0} row here (unlike the R11s table). */
+static const struct fp_module_gpio_config_info fp_18321_config[] = {
+	{ { 0, 0, 0 }, FP_FPC_1270, CHIP_FPC, ENGINEER_MENU_FPC1270 },
+	{ { 0, 1, 0 }, FP_FPC_1023, CHIP_FPC, ENGINEER_MENU_FPC1023 },
+	{ { 0, 1, 1 }, FP_FPC_1022, CHIP_FPC, ENGINEER_MENU_FPC1022 },
+	{ { 1, 0, 1 }, FP_GOODIX_3268, CHIP_GOODIX, ENGINEER_MENU_GOODIX_3268 },
+	{ { 1, 1, 0 }, FP_GOODIX_5288, CHIP_GOODIX, ENGINEER_MENU_GOODIX_5288 },
+	{ { 1, 1, 1 }, FP_FPC_1022, CHIP_FPC, ENGINEER_MENU_FPC1022 },
+};
+
 static const struct fp_module_config_info fp_16051_info = {
 	.list = fp_16051_config,
 	.count = ARRAY_SIZE(fp_16051_config),
@@ -92,6 +106,10 @@ static const struct fp_module_config_info fp_common_info = {
 static const struct fp_module_config_info fp_r11s_info = {
 	.list = fp_r11s_config,
 	.count = ARRAY_SIZE(fp_r11s_config),
+};
+static const struct fp_module_config_info fp_18321_info = {
+	.list = fp_18321_config,
+	.count = ARRAY_SIZE(fp_18321_config),
 };
 
 static const struct fp_module_config_info *fp_config_for_project(void)
@@ -107,6 +125,8 @@ static const struct fp_module_config_info *fp_config_for_project(void)
 	case OPPO_17011:
 	case OPPO_17021:
 		return &fp_r11s_info;
+	case OPPO_18321:
+		return &fp_18321_info;
 	default:
 		return &fp_common_info;
 	}
