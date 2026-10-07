@@ -1,0 +1,293 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Realme 2 Pro (18321 / RMX1801) 设备特有 dtsi
+ *
+ * 聚合共性 (oppo-sdm660-common.dtsi) + 承载 18321 特有硬件 overlay。
+ * 由入口 sdm660-pm660a-mtp-18321.dts 末尾 #include。
+ * 来源: oppo 4.4 18321/sdm660-mtp.dtsi + sdm660-pinctrl.dtsi + msm-pm660.dtsi;
+ * 面板 phy-v2 / 充电等争议项以 Q 代出厂固件 (DumprX/RMX1801-F12) 为准。
+ *
+ * 注意: RMX1801 有 eMMC (4/6GB) 与 UFS (8GB) 两种版本 → 本 DTB 必须同时
+ * 支持两种存储, 故在型号 overlay 重新启用 common 为其余 eMMC 设备关闭的
+ * UFS 节点 (见 common "a confirmed UFS SKU should enable all three" 注释)。
+ */
+#include "../dsi-panel-oppo18316himax_hx83112a_1080_2280_video.dtsi"
+#include "../dsi-panel-oppo18316dpt_jdi_nt36672a_1080_2340_video.dtsi"
+#include "../dsi-panel-oppo18316tianma_nt36672a_1080_2280_video.dtsi"
+/* 共享量产面板: oppo-sdm660-common.dtsi 无条件引用 17011/17021 两个 label,
+ * 故须先包含其一变体 (同 16051/16103/16118 的做法)。18321 出厂固件
+ * (F12/03) 中这两块面板的 init 命令为 "... f0 e6 be 0f ff ff ff"
+ * → 与 -16051-16103-16118 共享变体一致 (设备专属变体为 e0 ce...)。 */
+#include "../dsi-panel-oppo17011samsung_sofeg01_1080p_cmd-16051-16103-16118.dtsi"
+#include "../dsi-panel-oppo17021samsung_sofeg01_1080p_cmd-16051-16103-16118.dtsi"
+#include "oppo-sdm660-common.dtsi"
+
+/* ===== 18321 特有硬件 overlay ===== */
+
+/* --- mdss_dsi0: 18321 无 err 引脚; 增加 1.8V POC;
+ * LCD 5V ENP/ENN 由 pm660 GPIO3/11 驱动 (mdss_dsi.c 解析 enable-gpio)。 --- */
+&mdss_dsi0 {
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active
+			&mdss_exits_active &mdss_poc_1p8_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend
+			&mdss_exits_suspend>;
+	qcom,platform-enable-gpio = <&pm660_gpios 3 0>;
+	qcom,platform-enable-negative-gpio = <&pm660_gpios 11 0>;
+};
+
+/* --- 音频: 18321 无 ak4376 (从未在任何出厂固件出现), 删除 common 的
+ * "akm" 耳机 PA, 外放走 NXP TFA98xx。 --- */
+&int_codec {
+	/delete-property/ oppo,headphone-pa;
+	oppo,speaker-pa = "nxp";
+};
+
+/* --- Panel PHY v2 时序 ---
+ * himax: 用 Q 代固件最终调校值 26 20 0a 0b ×5 (Q 源码 sdm660-mdss-panels.dtsi
+ *   仍为 P 代旧值 24 1e...×4+24 1a..., 出厂固件已重调 → 以固件为准)。
+ * dpt/tianma: 与源码/固件一致 24 1e...×4 + 24 1a...。 --- */
+&dsi_oppo18316himax_hx83112a_1080_2280_video {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0];
+};
+
+&dsi_oppo18316dpt_jdi_nt36672a_1080_2340_video {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1a 08 09 05 03 04 a0];
+};
+
+&dsi_oppo18316tianma_nt36672a_1080_2280_video {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1a 08 09 05 03 04 a0];
+};
+
+/* --- 外放 NXP TFA98xx (18321: rst tlmm80, vdd pm660_l13) --- */
+&i2c_6 {
+	tfa98xx@36 {
+		compatible = "nxp,tfa98xx";
+		reg = <0x36>;
+		nxp,rst-ctrl-gpio = <&tlmm 80 0x00>;
+		tfa9890_vdd-supply = <&pm660_l13>;
+		status = "okay";
+	};
+};
+
+/* --- flash/torch 电流对齐 stock 18321 (base 1000/500, common torch 180) --- */
+&pm660l_flash0 {
+	qcom,current-ma = <750>;
+};
+
+&pm660l_flash1 {
+	qcom,current-ma = <750>;
+};
+
+&pm660l_torch0 {
+	qcom,current-ma = <108>;
+};
+
+&pm660l_torch1 {
+	qcom,current-ma = <108>;
+};
+
+/* --- 触摸屏 noflash (NT36672 + HX83112A 共用, SPI noflash 框架) --- */
+&spi_4 {
+	status = "ok";
+	touchscreen@0 {
+		compatible = "oppo,tp_noflash";
+		reg = <0>;
+		chip-name = "OPPO_TP_NOFLASH";
+		status = "ok";
+
+		spi-max-frequency = <9600000>;
+		reset-gpio = <&tlmm 66 0x00>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <67 0x0>;
+		irq-gpio = <&tlmm 67 0x2002>;
+
+		touchpanel,max-num-support = <10>;
+		touchpanel,tx-rx-num = <16 36>;
+		touchpanel,panel-coords = <1080 2340>;
+		touchpanel,display-coords = <1080 2340>;
+
+		incell_screen;
+		fw_edge_limit_support;
+		black_gesture_support;
+		charger_pump_support;
+		esd_handle_support;
+		game_switch_support;
+		black_gesture_test_support;
+		noflash_support;
+		smart_gesture_support;
+		lcd_trigger_load_tp_fw_support;
+
+		touchpanel,button-type = <4>;
+	};
+};
+
+/* --- HW 子板识别: gpio30 + gpio31 (common 只有 30; 17011/17021 同款) --- */
+&hw_sub_gpio_active {
+	mux { pins = "gpio30", "gpio31"; };
+	config { pins = "gpio30", "gpio31"; };
+};
+
+&hw_sub_gpio_sleep {
+	mux { pins = "gpio30", "gpio31"; };
+	config { pins = "gpio30", "gpio31"; };
+};
+
+/* --- 指纹 (fpc + goodix) / devinfo / 按键 --- */
+&soc {
+	/* fpc: common 缺 reset-gpio 与 vdd_3v (stock 18321 为 pm660l_l8) */
+	fpc_fpc1020 {
+		fpc,reset-gpio = <&tlmm 20 0x00>;
+		vdd_3v-supply = <&pm660l_l8>;
+	};
+
+	/* goodix: ldo5 用 pm660l_l8 (17011 为 l5) */
+	goodix_fp {
+		compatible = "goodix,goodix_fp";
+		interrupt-parent = <&tlmm>;
+		interrupts = <72 0>;
+		goodix,gpio_irq = <&tlmm 72 0x1>;
+		goodix,gpio_reset = <&tlmm 20 0x0>;
+		ldo5-supply = <&pm660l_l8>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_goodix_irq_default>;
+	};
+
+	devinfo {
+		compatible = "oppo-devinfo";
+		Hw,sub_hwid_1 = <&tlmm 30 0x00>;
+		Hw,sub_hwid_2 = <&tlmm 31 0x00>;
+		pinctrl-names = "default", "hw_sub_gpio_sleep";
+		pinctrl-0 = <&hw_sub_gpio_active>;
+		pinctrl-1 = <&hw_sub_gpio_sleep>;
+	};
+
+	/* vol_up 用 pm660l GPIO3 (F12 确认: <&pm660l_gpios 3 0x1>;
+	 * common 统一改成 GPIO8 → 18321 覆盖回 GPIO3) */
+	gpio_keys {
+		vol_up {
+			gpios = <&pm660l_gpios 3 0x1>;
+		};
+	};
+};
+
+&pm660l_gpios {
+	key_vol_up {
+		key_vol_up_default {
+			pins = "gpio3";
+		};
+	};
+};
+
+/* --- QUSB2 PHY: 18321 板级微调 (platform 文件为 R11/R11s 值; D1+F12 一致) --- */
+&qusb_phy0 {
+	qcom,qusb-phy-init-seq = <0x78 0x80
+				    0x70 0x84
+				    0x81 0x88
+				    0xc7 0x8c
+				    0x30 0x08
+				    0x79 0x0c
+				    0x21 0x10
+				    0x14 0x9c
+				    0x9f 0x1c
+				    0x00 0x18>;
+};
+
+/* --- UFS: 8GB 版本为 UFS (D1/F12 ufsphy1+ufs1 status ok);
+ * common 为 eMMC 设备关闭 → 此处重新启用全部三个节点。 --- */
+&ufs1 {
+	status = "okay";
+};
+
+&ufsphy1 {
+	status = "okay";
+};
+
+&ufs_ice {
+	status = "okay";
+};
+
+/* --- SD 卡: 18321 用 pm660l_l5 供电 (common 为 sdhc2_vdd_vreg);
+ * voltage/current level 已在 base sdm660-mtp.dtsi 且与 stock 一致。 --- */
+&sdhc_2 {
+	vdd-supply = <&pm660l_l5>;
+};
+
+/* --- 电池: 18321 为 3500mAh ATL (batt-id 105), 追加到共享 battery-data;
+ * 4.19 匹配为最近差值 (of_batterydata.c), atl 105 会胜出。 --- */
+&mtp_batterydata {
+	#include "../fg-gen3-batterydata-atl-3000mah.dtsi"
+};
+
+/* --- 充电: 4.19 qpnp-smb2 不解析任何 OPPO 4.4 私有属性 (iterm-ma/
+ * batt_capacity_mah/vooc_project/temp_*_vfloat_mv/... 均无解析),
+ * 仅移植 qcom,float-option (F12 确认 <1>)。 --- */
+&pm660_charger {
+	status = "okay";
+	qcom,float-option = <1>;
+};
+
+/* --- FG: 移植 stock 18321 中 4.19 fg-gen3 可解析的调参 (其余私有属性省略) --- */
+&pm660_fg {
+	qcom,fg-esr-timer-asleep = <160 256>;
+	qcom,fg-rsense-sel = <1>;
+	qcom,fg-jeita-thresholds = <(-30) (-25) 90 95>;
+	qcom,battery-thermal-coefficients = [9d 50 ff];
+	qcom,slope-limit-temp-threshold = <10>;
+	qcom,slope-limit-coeffs = <1 1 1 1>;
+	qcom,fg-esr-tight-lt-filter-micro-pct = <20000>;
+	qcom,fg-esr-broad-lt-filter-micro-pct = <30000>;
+	qcom,fg-chg-term-current = <200>;
+	qcom,fg-sys-term-current = <250>;
+	qcom,hold-soc-while-full;
+};
+
+/* --- 相机 pin 重分配: 18321 量产值 (common 为 16051/17011/17021 组) ---
+ * rear active=46 / suspend=47 (不对称!), rear2=48,
+ * front active=46+35 / suspend=46; mclk/actuator 与 base/common 一致。 --- */
+&cam_sensor_rear_active {
+	mux { pins = "gpio46"; };
+	config { pins = "gpio46"; bias-disable; drive-strength = <2>; };
+};
+
+&cam_sensor_rear_suspend {
+	mux { pins = "gpio47"; };
+	config { pins = "gpio47"; bias-disable; drive-strength = <2>; };
+};
+
+&cam_sensor_rear2_active {
+	mux { pins = "gpio48"; };
+	config { pins = "gpio48"; bias-disable; drive-strength = <2>; };
+};
+
+&cam_sensor_rear2_suspend {
+	mux { pins = "gpio48"; };
+	config { pins = "gpio48"; bias-disable; drive-strength = <2>; };
+};
+
+&cam_sensor_front_active {
+	mux { pins = "gpio46", "gpio35"; };
+	config { pins = "gpio46", "gpio35"; bias-disable; drive-strength = <2>; };
+};
+
+&cam_sensor_front_suspend {
+	mux { pins = "gpio46"; };
+	config { pins = "gpio46"; bias-disable; drive-strength = <2>; };
+};
+
+#include "oppo-camera-18321.dtsi"
