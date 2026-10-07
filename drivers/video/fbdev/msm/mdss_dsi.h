@@ -445,6 +445,10 @@ struct mdss_dsi_ctrl_pdata {
 	int disp_te_gpio;
 	int rst_gpio;
 	int disp_en_gpio;
+#ifdef CONFIG_MACH_REALME_RMX1801
+	/* RMX1801 (18321): LCD -5V enable (TPS65132 ENN) */
+	int disp_enn_gpio;
+#endif
 	int bklt_en_gpio;
 	bool bklt_en_gpio_invert;
 	bool bklt_en_gpio_state;
@@ -663,6 +667,9 @@ int mdss_dsi_pre_clkon_cb(void *priv,
 			  enum mdss_dsi_lclk_type l_type,
 			  enum mdss_dsi_clk_state new_state);
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable);
+#ifdef CONFIG_MACH_REALME_RMX1801
+int oppo_reset_before_lp11(struct mdss_panel_data *pdata);
+#endif
 void mdss_dsi_phy_disable(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_cmd_test_pattern(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_video_test_pattern(struct mdss_dsi_ctrl_pdata *ctrl);

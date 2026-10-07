@@ -10,6 +10,11 @@
 #include "mdss_mdp.h"
 #include "mdss_debug.h"
 
+#ifdef CONFIG_MACH_REALME_RMX1801
+/* add for lcd esd recovery power off when tp black gesture open */
+extern int lcd_esd_status;
+#endif
+
 /*
  * mdss_check_te_status() - Check the status of panel for TE based ESD.
  * @ctrl_pdata   : dsi controller data
@@ -179,4 +184,10 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 
 status_dead:
 	mdss_fb_report_panel_dead(pstatus_data->mfd);
+
+#ifdef CONFIG_MACH_REALME_RMX1801
+	/* add for lcd esd recovery power off when tp black gesture open */
+	lcd_esd_status = 0;
+	pr_debug("%s: lcd_esd_status=%d\n", __func__, lcd_esd_status);
+#endif
 }

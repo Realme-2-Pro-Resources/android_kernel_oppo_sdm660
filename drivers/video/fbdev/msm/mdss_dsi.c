@@ -1559,6 +1559,11 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 
 	mdss_dsi_clamp_phy_reset_config(ctrl_pdata, true);
 
+#ifdef CONFIG_MACH_REALME_RMX1801
+	/* add for lcd rst before lp11 (18321 DPT panel) */
+	oppo_reset_before_lp11(pdata);
+#endif
+
 	/* DSI link clocks need to be on prior to ctrl sw reset */
 	mdss_dsi_clk_ctrl(ctrl_pdata, ctrl_pdata->dsi_clk_handle,
 			  MDSS_DSI_LINK_CLK, MDSS_DSI_CLK_ON);
@@ -4552,6 +4557,20 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 			pr_debug("%s:%d, Disp_en gpio not specified\n",
 					__func__, __LINE__);
 	}
+
+#ifdef CONFIG_MACH_REALME_RMX1801
+	/*
+	 * RMX1801 (18321): LCD -5V enable (TPS65132 ENN), from the
+	 * stock 4.4 kernel (add for lcd -5v)
+	 */
+	ctrl_pdata->disp_enn_gpio = of_get_named_gpio(
+		ctrl_pdev->dev.of_node,
+		"qcom,platform-enable-negative-gpio", 0);
+
+	if (!gpio_is_valid(ctrl_pdata->disp_enn_gpio))
+		pr_debug("%s:%d, disp_enn gpio not specified\n",
+				__func__, __LINE__);
+#endif
 
 	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-te-gpio", 0);
