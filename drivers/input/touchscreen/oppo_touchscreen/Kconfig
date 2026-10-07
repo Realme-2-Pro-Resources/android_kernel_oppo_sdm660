@@ -39,8 +39,27 @@ config TOUCHPANEL_SYNAPTICS
 	---help---
 	say Y to enable driver for Touchpanel using Synaptics_IC
 
+config TOUCHPANEL_NOVA
+#	default y
+	bool "TP Nova_IC enable or not for OPPO"
+	---help---
+	say Y to enable driver for Touchpanel using NOVATECK_IC
+config TOUCHPANEL_HIMAX
+#	default y
+	bool "TP HIMAX_IC enable or not for OPPO"
+	---help---
+	say Y to enable driver for Touchpanel using HIMAX_IC
+
 source "drivers/input/touchscreen/oppo_touchscreen/util_interface/Kconfig"
 
 if TOUCHPANEL_SYNAPTICS
 source "drivers/input/touchscreen/oppo_touchscreen/Synaptics/Kconfig"
+endif
+
+if TOUCHPANEL_NOVA
+source "drivers/input/touchscreen/oppo_touchscreen/Novatek/Kconfig"
+endif
+
+if TOUCHPANEL_HIMAX
+source "drivers/input/touchscreen/oppo_touchscreen/Himax/Kconfig"
 endif
