@@ -391,11 +391,294 @@ ret:
 	return rc;
 }
 
-int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
+#ifdef CONFIG_MACH_REALME_RMX1801
+/*
+ * RMX1801 (18321) panel power support, adapted from the stock 4.4
+ * kernel (drivers/video/fbdev/msm/mdss_dsi_panel.c)
+ */
+
+/* add for +-5V second resource delay 2ms to 3ms */
+#define TPS65132_DELAY_3MS	3
+
+/* add for lcd esd recovery power off when tp black gesture open */
+int lcd_esd_status = 1;
+
+/* add for tp black gesture */
+extern int tp_gesture_enable_flag(void);
+static int mdss_tp_black_gesture_status(void)
+{
+	/* default disable tp gesture */
+	int ret = 0;
+
+	ret = tp_gesture_enable_flag();
+	pr_debug("%s: ret = %d\n", __func__, ret);
+	return ret;
+}
+
+static bool mdss_dsi_is_rmx1801_panel(struct mdss_panel_info *pinfo)
+{
+	return !strcmp(pinfo->panel_name,
+			"oppo18316himax hx83112a 1080 2340 video mode dsi panel") ||
+		!strcmp(pinfo->panel_name,
+			"oppo18316himax nt36672 1080 2340 video mode dsi panel") ||
+		!strcmp(pinfo->panel_name,
+			"oppo18321dpt nt36672a 1080 2340 video mode dsi panel");
+}
+
+static bool mdss_dsi_is_dpt_panel(struct mdss_panel_info *pinfo)
+{
+	return !strcmp(pinfo->panel_name,
+			"oppo18321dpt nt36672a 1080 2340 video mode dsi panel");
+}
+
+/*
+ * add for lcd power timing:
+ * TPS65132 +-5V enable sequence for the 18321 panels:
+ * 3ms -> ENP -> 3ms -> ENN -> 12ms -> panel reset -> 50ms
+ */
+static int mdss_dsi_rmx1801_panel_power_on(
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	struct mdss_panel_info *pinfo = &ctrl_pdata->panel_data.panel_info;
+	int i, rc = 0;
+
+	mdelay(TPS65132_DELAY_3MS);
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		rc = gpio_direction_output(ctrl_pdata->disp_en_gpio, 1);
+		if (rc) {
+			pr_err("%s: unable to set dir for en gpio\n", __func__);
+			return rc;
+		}
+	}
+
+	/* +-5V second resource delay 2ms to 3ms */
+	mdelay(TPS65132_DELAY_3MS);
+
+	if (gpio_is_valid(ctrl_pdata->disp_enn_gpio)) {
+		rc = gpio_request(ctrl_pdata->disp_enn_gpio,
+				"disp_enable_neg");
+		if (rc) {
+			pr_err("request disp enn gpio failed,rc=%d\n", rc);
+			return rc;
+		}
+
+		rc = gpio_direction_output(ctrl_pdata->disp_enn_gpio, 1);
+		if (rc) {
+			pr_err("%s: unable to set dir for disp_enable_neg gpio\n",
+				__func__);
+			return rc;
+		}
+	}
+
+	mdelay(12);
+
+	if (pinfo->rst_seq_len) {
+		rc = gpio_direction_output(ctrl_pdata->rst_gpio,
+			pinfo->rst_seq[0]);
+		if (rc) {
+			pr_err("%s: unable to set dir for rst gpio\n", __func__);
+			return rc;
+		}
+	}
+
+	for (i = 0; i < pinfo->rst_seq_len; ++i) {
+		gpio_set_value((ctrl_pdata->rst_gpio), pinfo->rst_seq[i]);
+		if (pinfo->rst_seq[++i])
+			usleep_range(pinfo->rst_seq[i] * 1000,
+				     pinfo->rst_seq[i] * 1000);
+	}
+	mdelay(50);
+
+	return rc;
+}
+
+static void mdss_dsi_rmx1801_panel_power_off(
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	struct mdss_panel_info *pinfo = &ctrl_pdata->panel_data.panel_info;
+
+	/*
+	 * add for lcd esd recovery power off when tp black gesture open:
+	 * keep the +-5V rails on while a gesture is armed so the touch
+	 * controller stays powered
+	 */
+	if ((0 != mdss_tp_black_gesture_status()) && lcd_esd_status) {
+		pr_debug("%s: tp black gesture on, keep lcd power on\n",
+			__func__);
+		if (gpio_is_valid(ctrl_pdata->rst_gpio))
+			gpio_free(ctrl_pdata->rst_gpio);
+		if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+			gpio_free(ctrl_pdata->disp_en_gpio);
+		if (gpio_is_valid(ctrl_pdata->disp_enn_gpio))
+			gpio_free(ctrl_pdata->disp_enn_gpio);
+		return;
+	}
+
+	/*
+	 * The DPT panel wants rst left alone on power off; it is
+	 * re-driven early on the next power on by oppo_reset_before_lp11().
+	 */
+	if (gpio_is_valid(ctrl_pdata->rst_gpio)) {
+		if (!mdss_dsi_is_dpt_panel(pinfo))
+			gpio_set_value((ctrl_pdata->rst_gpio), 0);
+		gpio_free(ctrl_pdata->rst_gpio);
+	}
+	mdelay(8);
+
+	if (gpio_is_valid(ctrl_pdata->disp_enn_gpio)) {
+		gpio_set_value((ctrl_pdata->disp_enn_gpio), 0);
+		gpio_free(ctrl_pdata->disp_enn_gpio);
+	}
+	mdelay(5);
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+		gpio_free(ctrl_pdata->disp_en_gpio);
+	}
+	mdelay(100);
+}
+
+/* add for lcd rst before lp11 (DPT panel only) */
+int oppo_reset_before_lp11(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *pinfo = NULL;
 	int i, rc = 0;
+
+	if (pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	/* Do not do rst_gpio reset on other panel. */
+	if (!mdss_dsi_is_dpt_panel(&pdata->panel_info))
+		return 0;
+
+	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+				panel_data);
+
+	pinfo = &(ctrl_pdata->panel_data.panel_info);
+
+	if (!gpio_is_valid(ctrl_pdata->rst_gpio)) {
+		pr_debug("%s:%d, reset line not configured\n",
+			__func__, __LINE__);
+		return rc;
+	}
+
+	if (pdata->panel_info.rst_seq_len) {
+		rc = gpio_direction_output(ctrl_pdata->rst_gpio,
+			pdata->panel_info.rst_seq[0]);
+		if (rc) {
+			pr_err("%s: unable to set dir for rst gpio\n",
+				__func__);
+			goto exit;
+		}
+	}
+
+	for (i = 2; i < pdata->panel_info.rst_seq_len; ++i) {
+		gpio_set_value((ctrl_pdata->rst_gpio),
+			pdata->panel_info.rst_seq[i]);
+		if (pdata->panel_info.rst_seq[++i])
+			usleep_range(pinfo->rst_seq[i] * 1000,
+				     pinfo->rst_seq[i] * 1000);
+	}
+	pr_debug("%s: done\n", __func__);
+exit:
+	return rc;
+}
+#endif /* CONFIG_MACH_REALME_RMX1801 */
+
+static int mdss_dsi_panel_gpio_power_on(
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	struct mdss_panel_info *pinfo = &ctrl_pdata->panel_data.panel_info;
+	int i, rc = 0;
+
+#ifdef CONFIG_MACH_REALME_RMX1801
+	if (mdss_dsi_is_rmx1801_panel(pinfo))
+		return mdss_dsi_rmx1801_panel_power_on(ctrl_pdata);
+#endif
+
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		rc = gpio_direction_output(ctrl_pdata->disp_en_gpio, 1);
+		if (rc) {
+			pr_err("%s: unable to set dir for en gpio\n",
+				__func__);
+			return rc;
+		}
+	}
+
+	if (pinfo->rst_seq_len) {
+		rc = gpio_direction_output(ctrl_pdata->rst_gpio,
+			pinfo->rst_seq[0]);
+		if (rc) {
+			pr_err("%s: unable to set dir for rst gpio\n",
+				__func__);
+			return rc;
+		}
+	}
+
+	for (i = 0; i < pinfo->rst_seq_len; ++i) {
+		gpio_set_value((ctrl_pdata->rst_gpio), pinfo->rst_seq[i]);
+		if (pinfo->rst_seq[++i])
+			usleep_range(pinfo->rst_seq[i] * 1000,
+					pinfo->rst_seq[i] * 1000);
+	}
+
+	if (gpio_is_valid(ctrl_pdata->avdd_en_gpio)) {
+		if (ctrl_pdata->avdd_en_gpio_invert) {
+			rc = gpio_direction_output(
+				ctrl_pdata->avdd_en_gpio, 0);
+		} else {
+			rc = gpio_direction_output(
+				ctrl_pdata->avdd_en_gpio, 1);
+		}
+		if (rc) {
+			pr_err("%s: unable to set dir for avdd_en gpio\n",
+				__func__);
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
+static void mdss_dsi_panel_gpio_power_off(
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+#ifdef CONFIG_MACH_REALME_RMX1801
+	if (mdss_dsi_is_rmx1801_panel(&ctrl_pdata->panel_data.panel_info)) {
+		mdss_dsi_rmx1801_panel_power_off(ctrl_pdata);
+		return;
+	}
+#endif
+
+	if (gpio_is_valid(ctrl_pdata->avdd_en_gpio)) {
+		if (ctrl_pdata->avdd_en_gpio_invert)
+			gpio_set_value((ctrl_pdata->avdd_en_gpio), 1);
+		else
+			gpio_set_value((ctrl_pdata->avdd_en_gpio), 0);
+
+		gpio_free(ctrl_pdata->avdd_en_gpio);
+	}
+	if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+		gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+		gpio_free(ctrl_pdata->disp_en_gpio);
+	}
+	gpio_set_value((ctrl_pdata->rst_gpio), 0);
+	gpio_free(ctrl_pdata->rst_gpio);
+	if (gpio_is_valid(ctrl_pdata->lcd_mode_sel_gpio)) {
+		gpio_set_value((ctrl_pdata->lcd_mode_sel_gpio), 0);
+		gpio_free(ctrl_pdata->lcd_mode_sel_gpio);
+	}
+}
+
+int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+	struct mdss_panel_info *pinfo = NULL;
+	int rc = 0;
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -434,48 +717,9 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			return rc;
 		}
 		if (!pinfo->cont_splash_enabled) {
-			if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
-				rc = gpio_direction_output(
-					ctrl_pdata->disp_en_gpio, 1);
-				if (rc) {
-					pr_err("%s: unable to set dir for en gpio\n",
-						__func__);
-					goto exit;
-				}
-			}
-
-			if (pdata->panel_info.rst_seq_len) {
-				rc = gpio_direction_output(ctrl_pdata->rst_gpio,
-					pdata->panel_info.rst_seq[0]);
-				if (rc) {
-					pr_err("%s: unable to set dir for rst gpio\n",
-						__func__);
-					goto exit;
-				}
-			}
-
-			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
-				gpio_set_value((ctrl_pdata->rst_gpio),
-					pdata->panel_info.rst_seq[i]);
-				if (pdata->panel_info.rst_seq[++i])
-					usleep_range(pinfo->rst_seq[i] * 1000,
-						pinfo->rst_seq[i] * 1000);
-			}
-
-			if (gpio_is_valid(ctrl_pdata->avdd_en_gpio)) {
-				if (ctrl_pdata->avdd_en_gpio_invert) {
-					rc = gpio_direction_output(
-						ctrl_pdata->avdd_en_gpio, 0);
-				} else {
-					rc = gpio_direction_output(
-						ctrl_pdata->avdd_en_gpio, 1);
-				}
-				if (rc) {
-					pr_err("%s: unable to set dir for avdd_en gpio\n",
-						__func__);
-					goto exit;
-				}
-			}
+			rc = mdss_dsi_panel_gpio_power_on(ctrl_pdata);
+			if (rc)
+				goto exit;
 		}
 
 		if (gpio_is_valid(ctrl_pdata->lcd_mode_sel_gpio)) {
@@ -504,24 +748,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_debug("%s: Reset panel done\n", __func__);
 		}
 	} else {
-		if (gpio_is_valid(ctrl_pdata->avdd_en_gpio)) {
-			if (ctrl_pdata->avdd_en_gpio_invert)
-				gpio_set_value((ctrl_pdata->avdd_en_gpio), 1);
-			else
-				gpio_set_value((ctrl_pdata->avdd_en_gpio), 0);
-
-			gpio_free(ctrl_pdata->avdd_en_gpio);
-		}
-		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
-			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
-			gpio_free(ctrl_pdata->disp_en_gpio);
-		}
-		gpio_set_value((ctrl_pdata->rst_gpio), 0);
-		gpio_free(ctrl_pdata->rst_gpio);
-		if (gpio_is_valid(ctrl_pdata->lcd_mode_sel_gpio)) {
-			gpio_set_value(ctrl_pdata->lcd_mode_sel_gpio, 0);
-			gpio_free(ctrl_pdata->lcd_mode_sel_gpio);
-		}
+		mdss_dsi_panel_gpio_power_off(ctrl_pdata);
 	}
 
 exit:
@@ -979,6 +1206,12 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (on_cmds->cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, on_cmds, CMD_REQ_COMMIT);
+
+#ifdef CONFIG_MACH_REALME_RMX1801
+	/* add for lcd esd recovery power off when tp black gesture open */
+	if (mdss_dsi_is_rmx1801_panel(pinfo))
+		lcd_esd_status = 1;
+#endif
 
 	if (pinfo->compression_mode == COMPRESSION_DSC)
 		mdss_dsi_panel_dsc_pps_send(ctrl, pinfo);
