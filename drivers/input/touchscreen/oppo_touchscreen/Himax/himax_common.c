@@ -89,7 +89,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
 {
     struct touchpanel_data *ts = s->private;
     struct himax_proc_operations *syna_ops;
-    struct timespec now_time;
+    struct timespec64 now_time;
     struct rtc_time rtc_now_time;
     mm_segment_t old_fs;
     uint8_t data_buf[64];
@@ -127,14 +127,14 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
     mutex_lock(&ts->mutex);
 
     //step2: create a file to store test data in /sdcard/Tp_Test
-    getnstimeofday(&now_time);
+    ktime_get_real_ts64(&now_time);
     rtc_time_to_tm(now_time.tv_sec, &rtc_now_time);
     sprintf(data_buf, "/sdcard/tp_testlimit_%02d%02d%02d-%02d%02d%02d-utc.csv",
             (rtc_now_time.tm_year + 1900) % 100, rtc_now_time.tm_mon + 1, rtc_now_time.tm_mday,
             rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
     old_fs = get_fs();
     set_fs(KERNEL_DS);
-    fd = sys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
+    fd = ksys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
     if (fd < 0) {
         TPD_INFO("Open log file '%s' failed.\n", data_buf);
         set_fs(old_fs);
@@ -165,7 +165,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
 
     //step5: close file && release test limit firmware
     if (fd >= 0) {
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
     }
 
