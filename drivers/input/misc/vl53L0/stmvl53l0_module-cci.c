@@ -239,8 +239,11 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 		data->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 		snprintf(data->msm_sd.sd.name,
 			 ARRAY_SIZE(data->msm_sd.sd.name), "msm_tof");
-		media_entity_init(&data->msm_sd.sd.entity, 0, NULL, 0);
-		data->msm_sd.sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV;
+		media_entity_pads_init(&data->msm_sd.sd.entity, 0, NULL);
+		/* 4.19: v4l2_subdev_init() already sets entity.obj_type to
+		 * MEDIA_ENTITY_TYPE_V4L2_SUBDEV; the old
+		 * entity.type = MEDIA_ENT_T_V4L2_SUBDEV assignment is obsolete.
+		 */
 		data->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_TOF;
 		data->msm_sd.close_seq =
 		    MSM_SD_CLOSE_2ND_CATEGORY | 0x2;
