@@ -188,9 +188,15 @@ static int himax_bus_read(uint8_t command, uint32_t length, uint8_t *data)
 
 static int himax_bus_write(uint8_t command, uint32_t length, uint8_t *data)
 {
-    uint8_t spi_format_buf[length + 2];
+    uint8_t *spi_format_buf = NULL;
     int i = 0;
     int result = 0;
+
+    spi_format_buf = kzalloc(length + 2, GFP_KERNEL);
+    if (!spi_format_buf) {
+        TPD_INFO("%s: kzalloc spi_format_buf error\n", __func__);
+        return -ENOMEM;
+    }
 
     mutex_lock(&(g_chip_info->spi_lock));
     spi_format_buf[0] = 0xF2;
@@ -201,6 +207,7 @@ static int himax_bus_write(uint8_t command, uint32_t length, uint8_t *data)
 
     result = himax_spi_write(spi_format_buf, length + 2);
     mutex_unlock(&(g_chip_info->spi_lock));
+    kfree(spi_format_buf);
 
     return result;
 }
@@ -3115,13 +3122,20 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
 
     uint32_t i/*, j*/ = 0;
     uint16_t weight = 0;
-    uint32_t RAW[datalen];
+    uint32_t *RAW = NULL;
 #ifdef RAWDATA_NOISE
     uint32_t RAW_Rawdata[datalen];
 #endif
     int ret = 0;
     //uint16_t* pInspectGridData = &gInspectGridData[0];
     //uint16_t* pInspectNoiseData = &gInspectNoiseData[0];
+
+    RAW = kzalloc(datalen * sizeof(uint32_t), GFP_KERNEL);
+    if (!RAW) {
+        TPD_INFO("%s: kzalloc RAW error\n", __func__);
+        return RESULT_ERR;
+    }
+
     if (himax_check_mode(checktype)) {
         TPD_INFO("Need Change Mode ,target=%s",g_himax_inspection_mode[checktype]);
 
@@ -3152,6 +3166,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
     ret = himax_wait_sorting_mode(checktype);
     if (ret) {
         TPD_INFO("%s: himax_wait_sorting_mode FAIL\n", __func__);
+        kfree(RAW);
         return ret;
         }
     }
@@ -3198,6 +3213,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
         TPD_INFO("%s: 800204B4: data[0]=%0x02X, data[1]=%0x02X, data[2]=%0x02X, data[3]=%0x02X,\n", __func__, tmp_data[0], tmp_data[1], tmp_data[2], tmp_data[3]);
 
         //900000A8,10007F40,10000000,10007F04,800204B4
+        kfree(RAW);
         return ret;
     }
 
@@ -3213,6 +3229,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > OPENMAX || RAW[i] < OPENMIN) {
                     TPD_INFO("%s: open test FAIL\n", __func__);
+                    kfree(RAW);
                     return RESULT_ERR;
                 }
             }
@@ -3226,6 +3243,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             }
                 if (RAW[i] > M_OPENMAX || RAW[i] < M_OPENMIN) {
                     TPD_INFO("%s: micro open test FAIL\n", __func__);
+                    kfree(RAW);
                     return RESULT_ERR;
                 }
             }
@@ -3240,6 +3258,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             }
                 if (RAW[i] > SHORTMAX || RAW[i] < SHORTMIN) {
                     TPD_INFO("%s: short test FAIL\n", __func__);
+                        kfree(RAW);
                         return RESULT_ERR;
                 }
             }
@@ -3253,6 +3272,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             }
                 if (RAW[i] > RAWMAX || RAW[i] < RAWMIN) {
                     TPD_INFO("%s: rawdata test FAIL\n", __func__);
+                    kfree(RAW);
                     return RESULT_ERR;
                 }
             }
@@ -3266,6 +3286,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > NOISEMAX) {
                     TPD_INFO("%s: noise test FAIL\n", __func__);
+                    kfree(RAW);
                     return RESULT_ERR;
                 }
             }*/
@@ -3273,6 +3294,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             weight = himax_get_noise_weight();
             if (weight > NOISEMAX) {
                 TPD_INFO("%s: noise test FAIL\n", __func__);
+                kfree(RAW);
                 return RESULT_ERR;
             }
             TPD_INFO("%s: noise test PASS\n", __func__);
@@ -3284,6 +3306,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             ret = himax_get_rawdata(chip_info, RAW, datalen);
             if (ret == RESULT_ERR) {
                 TPD_INFO("%s: himax_get_rawdata FAIL\n", __func__);
+                kfree(RAW);
                 return RESULT_ERR;
             }
 
@@ -3307,6 +3330,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > LPWUG_RAWDATA_MAX || RAW[i] < LPWUG_RAWDATA_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_RAWDATA FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ERAW;
                 }
             }
@@ -3319,6 +3343,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > LPWUG_NOISE_MAX || RAW[i] < LPWUG_NOISE_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_NOISE FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ENOISE;
                 }
             }*/
@@ -3326,6 +3351,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
             weight = himax_get_noise_weight();
             if (weight > LPWUG_NOISEMAX || weight < LPWUG_NOISE_MIN) {
                 TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_NOISE FAIL\n", __func__);
+                kfree(RAW);
                 return THP_AFE_INSPECT_ENOISE;
             }
             TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_NOISE PASS\n", __func__);
@@ -3337,6 +3363,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > DOZE_RAWDATA_MAX || RAW[i] < DOZE_RAWDATA_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_DOZE_RAWDATA FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ERAW;
                 }
             }
@@ -3349,6 +3376,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > DOZE_NOISE_MAX || RAW[i] < DOZE_NOISE_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_DOZE_NOISE FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ENOISE;
                 }
             }
@@ -3361,6 +3389,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > LPWUG_IDLE_RAWDATA_MAX || RAW[i] < LPWUG_IDLE_RAWDATA_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_IDLE_RAWDATA FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ERAW;
                 }
             }
@@ -3373,6 +3402,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
                 }
                 if (RAW[i] > LPWUG_IDLE_NOISE_MAX || RAW[i] < LPWUG_IDLE_NOISE_MIN) {
                     TPD_INFO("%s: HIMAX_INSPECTION_LPWUG_IDLE_NOISE FAIL\n", __func__);
+                        kfree(RAW);
                         return THP_AFE_INSPECT_ENOISE;
                 }
             }
@@ -3384,6 +3414,7 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
         break;
     }
 
+    kfree(RAW);
     return RESULT_OK;
 }
 
@@ -4226,15 +4257,18 @@ void himax_ts_diag_func(struct chip_data_hx83112b *chip_info, int32_t *mutual_da
     int j = 0;
     unsigned int index = 0;
     int total_size = chip_info->hw_res->TX_NUM * chip_info->hw_res->RX_NUM * 2;
-    uint8_t info_data[total_size];
+    uint8_t *info_data = NULL;
 
     int32_t new_data;
     /* 1:common dsram,2:100 frame Max,3:N-(N-1)frame */
     int dsram_type = 0;
     //char temp_buf[20];
-    char write_buf[total_size * 3];
 
-    memset(write_buf, '\0', sizeof(write_buf));
+    info_data = kzalloc(total_size, GFP_KERNEL);
+    if (!info_data) {
+        TPD_INFO("%s: kzalloc info_data error\n", __func__);
+        return;
+    }
 
     dsram_type = g_diag_command / 10;
 
@@ -4256,6 +4290,8 @@ void himax_ts_diag_func(struct chip_data_hx83112b *chip_info, int32_t *mutual_da
             index += 2;
         }
     }
+
+    kfree(info_data);
 }
 
 void diag_parse_raw_data(struct himax_report_data *hx_touch_data,int mul_num, int self_num,uint8_t diag_cmd, int32_t *mutual_data, int32_t *self_data)
@@ -5919,7 +5955,7 @@ static void store_to_file(int fd, char* format, ...)
     va_end(args);
 
     if(fd >= 0) {
-        sys_write(fd, buf, strlen(buf));
+        ksys_write(fd, buf, strlen(buf));
     }
 }
 

@@ -509,7 +509,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
     struct touchpanel_data *ts = s->private;
     struct nvt_proc_operations *nvt_ops;
     const struct firmware *fw = NULL;
-    struct timespec now_time;
+    struct timespec64 now_time;
     struct rtc_time rtc_now_time;
     mm_segment_t old_fs;
     uint8_t data_buf[128];
@@ -546,16 +546,16 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
     }
 
     //step2: create a file to store test data in /sdcard/Tp_Test
-    getnstimeofday(&now_time);
+    ktime_get_real_ts64(&now_time);
     rtc_time_to_tm(now_time.tv_sec, &rtc_now_time);
     snprintf(data_buf, 128, "/sdcard/TpTestReport/screenOn/tp_testlimit_%02d%02d%02d-%02d%02d%02d-utc.csv",
             (rtc_now_time.tm_year + 1900) % 100, rtc_now_time.tm_mon + 1, rtc_now_time.tm_mday,
             rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
     old_fs = get_fs();
     set_fs(KERNEL_DS);
-    sys_mkdir("/sdcard/TpTestReport", 0666);
-    sys_mkdir("/sdcard/TpTestReport/screenOn", 0666);
-    fd = sys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
+    ksys_mkdir("/sdcard/TpTestReport", 0666);
+    ksys_mkdir("/sdcard/TpTestReport/screenOn", 0666);
+    fd = ksys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
     if (fd < 0) {
         TPD_INFO("Open log file '%s' failed.\n", data_buf);
         set_fs(old_fs);
@@ -570,7 +570,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
     if (ret < 0) {
         TPD_INFO("Request firmware failed - %s (%d)\n", ts->panel_data.test_limit_name, ret);
         seq_printf(s, "No limit IMG\n");
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
         mutex_unlock(&ts->mutex);
         enable_irq(ts->irq);
@@ -591,7 +591,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
 
     //step4: close file && release test limit firmware
     if (fd >= 0) {
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
     }
     release_firmware(fw);
