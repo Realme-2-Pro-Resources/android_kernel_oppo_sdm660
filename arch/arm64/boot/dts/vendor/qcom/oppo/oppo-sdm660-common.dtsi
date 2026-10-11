@@ -2,6 +2,7 @@
 #include "../dsi-panel-oppo16103jdi_r63452_1080p_cmd.dtsi"
 #include "../dsi-panel-oppo16118samsung_s6e3fa3_1080p_cmd.dtsi"
 #include "oppo-sdm660-platform.dtsi"
+#include "oppo-sdm660-ramoops.dtsi"
 
 &pmic_analog_codec {
 	qcom,cdc-micbias-cfilt-mv = <2700000>;
