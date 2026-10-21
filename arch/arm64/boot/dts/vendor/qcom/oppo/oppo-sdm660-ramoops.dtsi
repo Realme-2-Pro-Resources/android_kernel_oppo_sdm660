@@ -12,11 +12,13 @@
 
 / {
 	reserved-memory {
-		ramoops {
+		ramoops@9c400000 {
 			compatible = "removed-dma-pool", "ramoops";
 			no-map;
 			reg = <0 0x9c400000 0 0x1000000>;
 			status = "ok";
+
+			record-size = <0x200000>;
 			console-size = <0x200000>;
 			pmsg-size = <0x200000>;
 		};
