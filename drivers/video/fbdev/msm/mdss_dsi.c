@@ -25,6 +25,10 @@
 #include "mdss_dba_utils.h"
 #include "mdss_livedisplay.h"
 
+#ifdef CONFIG_TOUCHPANEL_OPPO
+extern void lcd_queue_load_tp_fw(void);
+#endif
+
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
 /* Master structure to hold all the information about the DSI/panel */
@@ -1573,6 +1577,11 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 			pr_debug("reset enable: pinctrl not enabled\n");
 		mdss_dsi_panel_reset(pdata, 1);
 	}
+
+#ifdef CONFIG_TOUCHPANEL_OPPO
+	/* Incell noflash TP firmware is lost on LCD reset, reload it */
+	lcd_queue_load_tp_fw();
+#endif
 
 	if (mipi->init_delay)
 		usleep_range(mipi->init_delay, mipi->init_delay);
