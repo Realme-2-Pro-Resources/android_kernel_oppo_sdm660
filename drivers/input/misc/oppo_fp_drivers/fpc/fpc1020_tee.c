@@ -72,12 +72,19 @@ static const struct vreg_config const vreg_conf[] = {
 		1800000UL,
 		10000,
 	},
+	{
+		"vdd_3v",
+		3000000UL,
+		3000000UL,
+		6000,
+	},
 };
 
 struct fpc1020_data {
 	struct device *dev;
 	int irq_gpio;
 	int irq_num;
+	int rst_gpio;
 	struct mutex lock;
 	bool prepared;
 
@@ -254,6 +261,8 @@ static ssize_t regulator_enable_set(struct device *dev,
 		return -EINVAL;
 	}
 	rc = vreg_setup(fpc1020, "vdd_io", enable);
+	if (!rc && get_fpsensor_type() == FP_FPC_1023_GLASS)
+		rc = vreg_setup(fpc1020, "vdd_3v", enable);
 	return rc ? rc : count;
 }
 
@@ -414,6 +423,20 @@ static int fpc1020_probe(struct platform_device *pdev)
 	}
 
 	/*dev_info(fpc1020->dev, "fpc1020 requested gpio finished \n");*/
+
+	/* Reset line is optional, only some boards wire it up */
+	fpc1020->rst_gpio = -EINVAL;
+	if (of_find_property(dev->of_node, "fpc,reset-gpio", NULL)) {
+		rc = fpc1020_request_named_gpio(fpc1020, "fpc,reset-gpio",
+						&fpc1020->rst_gpio);
+		if (rc)
+			goto ERR_AFTER_WAKELOCK;
+
+		gpio_direction_output(fpc1020->rst_gpio, 0);
+		udelay(FPC1020_RESET_HIGH2_US);
+		gpio_set_value(fpc1020->rst_gpio, 1);
+		udelay(FPC1020_RESET_HIGH1_US);
+	}
 
 	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 	mutex_init(&fpc1020->lock);
