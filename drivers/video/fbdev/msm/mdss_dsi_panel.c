@@ -3103,6 +3103,7 @@ int mdss_dsi_panel_init(struct device_node *node,
 #ifdef CONFIG_OPPO_DEVICE_INFO
 	const char *panel_manufacture;
 	const char *panel_version;
+	static bool lcd_devinfo_registered;
 #endif
 	struct mdss_panel_info *pinfo;
 
@@ -3129,12 +3130,14 @@ int mdss_dsi_panel_init(struct device_node *node,
 		"qcom,mdss-dsi-panel-version", NULL);
 	panel_manufacture = of_get_property(node,
 		"qcom,mdss-dsi-panel-manufacture", NULL);
-	if (panel_version && panel_manufacture) {
+	if (panel_version && panel_manufacture && !lcd_devinfo_registered) {
 		rc = register_device_proc("lcd", (char *)panel_version,
 			(char *)panel_manufacture);
 		if (rc)
 			pr_warn("%s: failed to register lcd devinfo: %d\n",
 				__func__, rc);
+		else
+			lcd_devinfo_registered = true;
 	}
 #endif
 
