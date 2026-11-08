@@ -72,40 +72,6 @@ int irq_en_cnt = 0;
 
 
 /*******Part0: SPI Interface***************/
-#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
-const struct mtk_chip_config hx_spi_ctrdata = {
-    .rx_mlsb = 1,
-    .tx_mlsb = 1,
-    .cs_pol = 0,
-};
-#else
-const struct mt_chip_conf hx_spi_ctrdata = {
-        .setuptime = 25,
-        .holdtime = 25,
-        .high_time = 3, /* 16.6MHz */
-        .low_time = 3,
-        .cs_idletime = 2,
-        .ulthgh_thrsh = 0,
-
-        .cpol = 0,
-        .cpha = 0,
-
-        .rx_mlsb = 1,
-        .tx_mlsb = 1,
-
-        .tx_endian = 0,
-        .rx_endian = 0,
-
-        .com_mod = DMA_TRANSFER,
-
-        .pause = 0,
-        .finish_intr = 1,
-        .deassert = 0,
-        .ulthigh = 0,
-        .tckdly = 0,
-};
-#endif
-
 static ssize_t himax_spi_sync(struct touchpanel_data *ts, struct spi_message *message)
 {
     int status;
@@ -124,17 +90,26 @@ static int himax_spi_read(uint8_t *command, uint8_t command_len, uint8_t *data, 
 {
     struct spi_message message;
     struct spi_transfer xfer[2];
+    uint8_t *tx_buf, *rx_buf;
     int retry = 0;
     int error = -1;
+
+    /* Callers may pass stack buffers, which are not DMA-safe with VMAP_STACK */
+    tx_buf = kmemdup(command, command_len, GFP_KERNEL);
+    rx_buf = kzalloc(length, GFP_KERNEL);
+    if (!tx_buf || !rx_buf) {
+        error = -ENOMEM;
+        goto out;
+    }
 
     spi_message_init(&message);
     memset(xfer, 0, sizeof(xfer));
 
-    xfer[0].tx_buf = command;
+    xfer[0].tx_buf = tx_buf;
     xfer[0].len = command_len;
     spi_message_add_tail(&xfer[0], &message);
 
-    xfer[1].rx_buf = data;
+    xfer[1].rx_buf = rx_buf;
     xfer[1].len = length;
     spi_message_add_tail(&xfer[1], &message);
 
@@ -149,10 +124,16 @@ static int himax_spi_read(uint8_t *command, uint8_t command_len, uint8_t *data, 
     if (retry == toRetry) {
         TPD_INFO("%s: SPI read error retry over %d\n",
             __func__, toRetry);
-        return -EIO;
+        error = -EIO;
+        goto out;
     }
 
-    return 0;
+    memcpy(data, rx_buf, length);
+    error = 0;
+out:
+    kfree(tx_buf);
+    kfree(rx_buf);
+    return error;
 }
 
 static int himax_spi_write(uint8_t *buf, uint32_t length)
@@ -188,20 +169,22 @@ static int himax_bus_read(uint8_t command, uint32_t length, uint8_t *data)
 
 static int himax_bus_write(uint8_t command, uint32_t length, uint8_t *data)
 {
-    uint8_t spi_format_buf[length + 2];
-    int i = 0;
+    uint8_t *spi_format_buf;
     int result = 0;
+
+    spi_format_buf = kmalloc(length + 2, GFP_KERNEL);
+    if (!spi_format_buf)
+        return -ENOMEM;
 
     mutex_lock(&(g_chip_info->spi_lock));
     spi_format_buf[0] = 0xF2;
     spi_format_buf[1] = command;
-
-    for (i = 0; i < length; i++)
-        spi_format_buf[i + 2] = data[i];
+    memcpy(&spi_format_buf[2], data, length);
 
     result = himax_spi_write(spi_format_buf, length + 2);
     mutex_unlock(&(g_chip_info->spi_lock));
 
+    kfree(spi_format_buf);
     return result;
 }
 
@@ -3108,14 +3091,13 @@ int himax_check_notch(int index)
     }
 }
 
-int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t datalen)
+static int __mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t datalen, uint32_t *RAW)
 {
     uint8_t tmp_addr[4] = {0};
     uint8_t tmp_data[4] = {0};
 
     uint32_t i/*, j*/ = 0;
     uint16_t weight = 0;
-    uint32_t RAW[datalen];
 #ifdef RAWDATA_NOISE
     uint32_t RAW_Rawdata[datalen];
 #endif
@@ -3385,6 +3367,21 @@ int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t
     }
 
     return RESULT_OK;
+}
+
+int mpTestFunc(struct chip_data_hx83112b *chip_info, uint8_t checktype, uint32_t datalen)
+{
+    uint32_t *RAW;
+    int ret;
+
+    RAW = kcalloc(datalen, sizeof(*RAW), GFP_KERNEL);
+    if (!RAW)
+        return RESULT_ERR;
+
+    ret = __mpTestFunc(chip_info, checktype, datalen, RAW);
+    kfree(RAW);
+
+    return ret;
 }
 
 static void hx83112b_black_screen_test(void *chip_data, char *message)
@@ -4226,15 +4223,15 @@ void himax_ts_diag_func(struct chip_data_hx83112b *chip_info, int32_t *mutual_da
     int j = 0;
     unsigned int index = 0;
     int total_size = chip_info->hw_res->TX_NUM * chip_info->hw_res->RX_NUM * 2;
-    uint8_t info_data[total_size];
+    uint8_t *info_data;
 
     int32_t new_data;
     /* 1:common dsram,2:100 frame Max,3:N-(N-1)frame */
     int dsram_type = 0;
-    //char temp_buf[20];
-    char write_buf[total_size * 3];
 
-    memset(write_buf, '\0', sizeof(write_buf));
+    info_data = kzalloc(total_size, GFP_KERNEL);
+    if (!info_data)
+        return;
 
     dsram_type = g_diag_command / 10;
 
@@ -4256,6 +4253,8 @@ void himax_ts_diag_func(struct chip_data_hx83112b *chip_info, int32_t *mutual_da
             index += 2;
         }
     }
+
+    kfree(info_data);
 }
 
 void diag_parse_raw_data(struct himax_report_data *hx_touch_data,int mul_num, int self_num,uint8_t diag_cmd, int32_t *mutual_data, int32_t *self_data)
@@ -5919,7 +5918,7 @@ static void store_to_file(int fd, char* format, ...)
     va_end(args);
 
     if(fd >= 0) {
-        sys_write(fd, buf, strlen(buf));
+        ksys_write(fd, buf, strlen(buf));
     }
 }
 
@@ -6353,21 +6352,11 @@ static int hx83112b_tp_probe(struct spi_device *spi)
     ts->s_client->mode = SPI_MODE_3;
     ts->s_client->chip_select = 0;
 
-#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
-    /* new usage of MTK spi API */
-    memcpy(&chip_info->hx_spi_mcc, &hx_spi_ctrdata, sizeof(struct mtk_chip_config));
-    ts->s_client->controller_data = (void *)&chip_info->hx_spi_mcc;
-#else
-    /* old usage of MTK spi API */
-    memcpy(&chip_info->hx_spi_mcc, &hx_spi_ctrdata, sizeof(struct mt_chip_conf));
-    ts->s_client->controller_data = (void *)&chip_info->hx_spi_mcc;
-
     ret = spi_setup(ts->s_client);
     if (ret < 0) {
         TPD_INFO("Failed to perform SPI setup\n");
         goto err_spi_setup;
     }
-#endif    
     chip_info->p_spuri_fp_touch = &(ts->spuri_fp_touch);    
     
     //disable_irq_nosync(chip_info->hx_irq);

@@ -134,7 +134,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
             rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
     old_fs = get_fs();
     set_fs(KERNEL_DS);
-    fd = sys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
+    fd = ksys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
     if (fd < 0) {
         TPD_INFO("Open log file '%s' failed.\n", data_buf);
         set_fs(old_fs);
@@ -165,7 +165,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
 
     //step5: close file && release test limit firmware
     if (fd >= 0) {
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
     }
 

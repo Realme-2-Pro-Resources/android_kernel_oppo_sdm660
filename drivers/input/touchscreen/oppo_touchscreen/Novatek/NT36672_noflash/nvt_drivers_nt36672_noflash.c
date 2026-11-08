@@ -153,39 +153,6 @@ static const struct nvt_ts_trim_id_table trim_id_table[] = {
         .mmap = &NT36772_memory_map, .carrier_system = 0,  .support_hw_crc = 0},
 };
 
-#ifdef CONFIG_SPI_MT65XX
-static const struct mtk_chip_config spi_ctrdata = {
-    .rx_mlsb = 1,
-    .tx_mlsb = 1,
-    .cs_pol = 0,
-};
-#else
-static const struct mt_chip_conf spi_ctrdata = {
-        .setuptime = 25,
-        .holdtime = 25,
-        .high_time = 3, /* 16.6MHz */
-        .low_time = 3,
-        .cs_idletime = 2,
-        .ulthgh_thrsh = 0,
-
-        .cpol = 0,
-        .cpha = 0,
-
-        .rx_mlsb = 1,
-        .tx_mlsb = 1,
-
-        .tx_endian = 0,
-        .rx_endian = 0,
-
-        .com_mod = DMA_TRANSFER,
-
-        .pause = 0,
-        .finish_intr = 1,
-        .deassert = 0,
-        .ulthigh = 0,
-        .tckdly = 0,
-};
-#endif	//CONFIG_SPI_MT65XX
 
 /*******************************************************
 Description:
@@ -2218,7 +2185,7 @@ static void store_to_file(int fd, char* format, ...)
     va_end(args);
 
     if(fd >= 0) {
-        sys_write(fd, buf, strlen(buf));
+        ksys_write(fd, buf, strlen(buf));
     }
 }
 
@@ -2676,8 +2643,8 @@ static void nvt_black_screen_test(void *chip_data, char *message)
             rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
         old_fs = get_fs();
         set_fs(KERNEL_DS);
-        sys_mkdir("/sdcard/TpTestReport/screenOff", 0666);
-        fd = sys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
+        ksys_mkdir("/sdcard/TpTestReport/screenOff", 0666);
+        fd = ksys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
         if (fd < 0) {
                 TPD_INFO("Open log file '%s' failed.\n", data_buf);
                 err_cnt++;
@@ -2859,7 +2826,7 @@ static void nvt_black_screen_test(void *chip_data, char *message)
 
 OUT:
         if (fd >= 0) {
-                sys_close(fd);
+                ksys_close(fd);
         }
         set_fs(old_fs);
 
@@ -3912,21 +3879,11 @@ static int nvt_tp_probe(struct spi_device *client)
     ts->s_client->mode = SPI_MODE_0;
     ts->s_client->chip_select = 0; //modify reg=0 for more tp vendor share same spi interface
 
-#ifdef CONFIG_SPI_MT65XX
-    /* new usage of MTK spi API */
-    memcpy(&chip_info->spi_ctrl, &spi_ctrdata, sizeof(struct mtk_chip_config));
-    ts->s_client->controller_data = (void *)&chip_info->spi_ctrl;
-#else
-    /* old usage of MTK spi API */
-    memcpy(&chip_info->spi_ctrl, &spi_ctrdata, sizeof(struct mt_chip_conf));
-    ts->s_client->controller_data = (void *)&chip_info->spi_ctrl;
-
     ret = spi_setup(ts->s_client);
     if (ret < 0) {
         TPD_INFO("Failed to perform SPI setup\n");
         goto err_spi_setup;
     }
-#endif	//CONFIG_SPI_MT65XX
 
     TPD_INFO("mode=%d, max_speed_hz=%d\n", ts->s_client->mode, ts->s_client->max_speed_hz);
 

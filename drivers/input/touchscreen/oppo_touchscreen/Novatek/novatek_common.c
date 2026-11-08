@@ -553,9 +553,9 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
             rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
     old_fs = get_fs();
     set_fs(KERNEL_DS);
-    sys_mkdir("/sdcard/TpTestReport", 0666);
-    sys_mkdir("/sdcard/TpTestReport/screenOn", 0666);
-    fd = sys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
+    ksys_mkdir("/sdcard/TpTestReport", 0666);
+    ksys_mkdir("/sdcard/TpTestReport/screenOn", 0666);
+    fd = ksys_open(data_buf, O_WRONLY | O_CREAT | O_TRUNC, 0);
     if (fd < 0) {
         TPD_INFO("Open log file '%s' failed.\n", data_buf);
         set_fs(old_fs);
@@ -570,7 +570,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
     if (ret < 0) {
         TPD_INFO("Request firmware failed - %s (%d)\n", ts->panel_data.test_limit_name, ret);
         seq_printf(s, "No limit IMG\n");
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
         mutex_unlock(&ts->mutex);
         enable_irq(ts->irq);
@@ -591,7 +591,7 @@ static int tp_auto_test_read_func(struct seq_file *s, void *v)
 
     //step4: close file && release test limit firmware
     if (fd >= 0) {
-        sys_close(fd);
+        ksys_close(fd);
         set_fs(old_fs);
     }
     release_firmware(fw);
