@@ -1,0 +1,290 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include "../dsi-panel-oppo17011samsung_sofeg01_1080p_cmd.dtsi"
+#include "../dsi-panel-oppo17021samsung_sofeg01_1080p_cmd.dtsi"
+#include "../dsi-panel-oppo18316dpt_jdi_nt36672a_1080_2340_video.dtsi"
+#include "../dsi-panel-oppo18316himax_hx83112a_1080_2280_video.dtsi"
+#include "../dsi-panel-oppo18316tianma_nt36672a_1080_2280_video.dtsi"
+#include "oppo-sdm660-common.dtsi"
+
+/delete-node/ &removed_regions1;
+
+&removed_regions {
+	reg = <0x0 0x85800000 0x0 0x5300000>;
+};
+
+&soc {
+	/delete-node/ qcom,rmtfs_sharedmem@85e00000;
+
+	qcom,rmtfs_sharedmem@0 {
+		compatible = "qcom,sharedmem-uio";
+		reg = <0x0 0x200000>;
+		reg-names = "rmtfs";
+		qcom,client-id = <0x00000001>;
+		qcom,guard-memory;
+	};
+};
+
+&int_codec {
+	oppo,speaker-pa = "nxp";
+};
+
+/* 8GB variant uses UFS, 4/6GB use eMMC */
+&{/firmware/android} {
+	boot_devices = "soc/c0c4000.sdhci,soc/1da4000.ufshc";
+};
+
+&ufsphy1 {
+	status = "ok";
+};
+
+&ufs1 {
+	status = "ok";
+};
+
+&ufs_ice {
+	status = "ok";
+};
+
+&mdss_dsi0 {
+	qcom,dsi-pref-prim-pan = <&dsi_oppo18316dpt_jdi_nt36672a_1080_2340_video>;
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active
+			&mdss_exits_active &mdss_poc_1p8_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend
+			&mdss_exits_suspend>;
+	lcd-vsp-supply = <&lcd_vsp_18321>;
+	lcd-vsn-supply = <&lcd_vsn_18321>;
+	/delete-property/ oledb-supply;
+	/delete-property/ vddio-supply;
+	/delete-property/ oled-vdda-supply;
+};
+
+&mdss_dsi1 {
+	/delete-property/ oledb-supply;
+};
+
+&pm660a_oledb {
+	status = "disabled";
+};
+
+&pm660a_labibb {
+	status = "disabled";
+};
+
+&pm660l_wled {
+	qcom,string-cfg = <7>;
+	qcom,fs-current-limit = <20000>;
+	qcom,ovp = <29600>;
+	qcom,boost-current-limit = <970>;
+	qcom,switching-freq = <800>;
+	qcom,en-cabc;
+	status = "ok";
+};
+
+&soc {
+	lcd_vsp_18321: regulator-lcd-vsp-18321 {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd_vsp_18321";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		enable-active-high;
+		gpio = <&pm660_gpios 3 0>;
+	};
+
+	lcd_vsn_18321: regulator-lcd-vsn-18321 {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd_vsn_18321";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		enable-active-high;
+		gpio = <&pm660_gpios 11 0>;
+	};
+
+	oppo_dsi_panel_pwr_supply_18321: oppo_dsi_panel_pwr_supply_18321 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		qcom,panel-supply-entry@0 {
+			reg = <0>;
+			qcom,supply-name = "lcd-vsp";
+			qcom,supply-min-voltage = <5000000>;
+			qcom,supply-max-voltage = <5000000>;
+			qcom,supply-enable-load = <0>;
+			qcom,supply-disable-load = <0>;
+			qcom,supply-pre-on-sleep = <3>;
+			qcom,supply-post-on-sleep = <3>;
+			qcom,supply-post-off-sleep = <100>;
+		};
+
+		qcom,panel-supply-entry@1 {
+			reg = <1>;
+			qcom,supply-name = "lcd-vsn";
+			qcom,supply-min-voltage = <5000000>;
+			qcom,supply-max-voltage = <5000000>;
+			qcom,supply-enable-load = <0>;
+			qcom,supply-disable-load = <0>;
+			qcom,supply-post-on-sleep = <12>;
+			qcom,supply-pre-off-sleep = <8>;
+			qcom,supply-post-off-sleep = <5>;
+		};
+	};
+};
+
+&dsi_oppo18316dpt_jdi_nt36672a_1080_2340_video {
+	qcom,panel-supply-entries = <&oppo_dsi_panel_pwr_supply_18321>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1a 08 09 05 03 04 a0];
+};
+
+&dsi_oppo18316himax_hx83112a_1080_2280_video {
+	qcom,panel-supply-entries = <&oppo_dsi_panel_pwr_supply_18321>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0
+		26 20 0a 0b 06 02 04 a0];
+};
+
+&dsi_oppo18316tianma_nt36672a_1080_2280_video {
+	qcom,panel-supply-entries = <&oppo_dsi_panel_pwr_supply_18321>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1e 08 09 05 03 04 a0
+		24 1a 08 09 05 03 04 a0];
+};
+
+&sdhc_2 {
+	vdd-supply = <&pm660l_l5>;
+};
+
+&key_vol_up_default {
+	pins = "gpio3";
+};
+
+&soc {
+	gpio_keys {
+		vol_up {
+			gpios = <&pm660l_gpios 3 0x1>;
+		};
+	};
+};
+
+&i2c_6 {
+	status = "okay";
+
+	ak4376@10 {
+		compatible = "akm,ak4376";
+		reg = <0x10>;
+		ak4376,reset-gpio = <&tlmm 76 0x00>;
+		audio-vdd-enable-gpio = <&tlmm 60 0x00>;
+		status = "okay";
+	};
+
+	tfa98xx@36 {
+		compatible = "nxp,tfa98xx";
+		reg = <0x36>;
+		nxp,rst-ctrl-gpio = <&tlmm 80 0x00>;
+		tfa9890_vdd-supply = <&pm660_l13>;
+		status = "okay";
+	};
+};
+
+&pm660l_flash0 {
+	qcom,current-ma = <750>;
+};
+
+&pm660l_flash1 {
+	qcom,current-ma = <750>;
+};
+
+&pm660l_torch0 {
+	qcom,current-ma = <108>;
+};
+
+&pm660l_torch1 {
+	qcom,current-ma = <108>;
+};
+
+&spi_4 {
+	status = "okay";
+
+	touchscreen@0 {
+		compatible = "oppo,tp_noflash";
+		reg = <0>;
+		chip-name = "OPPO_TP_NOFLASH";
+		spi-max-frequency = <9600000>;
+		reset-gpio = <&tlmm 66 0x00>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <67 0x0>;
+		irq-gpio = <&tlmm 67 0x2002>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ts_int_active &ts_reset_active>;
+
+		touchpanel,max-num-support = <10>;
+		touchpanel,tx-rx-num = <16 36>;
+		touchpanel,panel-coords = <1080 2340>;
+		touchpanel,display-coords = <1080 2340>;
+
+		incell_screen;
+		fw_edge_limit_support;
+		black_gesture_support;
+		charger_pump_support;
+		esd_handle_support;
+		game_switch_support;
+		black_gesture_test_support;
+		noflash_support;
+		smart_gesture_support;
+		lcd_trigger_load_tp_fw_support;
+
+		touchpanel,button-type = <4>;
+		status = "okay";
+	};
+};
+
+&hw_sub_gpio_active {
+	mux { pins = "gpio30", "gpio31"; };
+	config { pins = "gpio30", "gpio31"; };
+};
+
+&hw_sub_gpio_sleep {
+	mux { pins = "gpio30", "gpio31"; };
+	config { pins = "gpio30", "gpio31"; };
+};
+
+&soc {
+	fpc_fpc1020 {
+		fpc,reset-gpio = <&tlmm 20 0x00>;
+		vdd_3v-supply = <&pm660l_l8>;
+	};
+
+	goodix_fp {
+		compatible = "goodix,goodix_fp";
+		interrupt-parent = <&tlmm>;
+		interrupts = <72 0>;
+		goodix,gpio_irq = <&tlmm 72 0x1>;
+		goodix,gpio_reset = <&tlmm 20 0x0>;
+		ldo5-supply = <&pm660l_l8>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_goodix_irq_default>;
+	};
+
+	devinfo {
+		compatible = "oppo-devinfo";
+		Hw,sub_hwid_1 = <&tlmm 30 0x00>;
+		Hw,sub_hwid_2 = <&tlmm 31 0x00>;
+		pinctrl-names = "default", "hw_sub_gpio_sleep";
+		pinctrl-0 = <&hw_sub_gpio_active>;
+		pinctrl-1 = <&hw_sub_gpio_sleep>;
+	};
+};
+
+#include "oppo-camera-18321.dtsi"
